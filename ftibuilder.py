@@ -1,6 +1,7 @@
 import argparse
 import xml.etree.ElementTree as ET
 import itertools
+import random
 
 from svg.path import parse_path
 
@@ -10,13 +11,22 @@ FTIBuilder: generate SGI Icon
 """
 
 class FTIPath:
-  def __init__(self, svg_element=None, num_samples=None):
+  def __init__(
+    self,
+    svg_document=None,
+    svg_element=None,
+    num_samples=None
+  ):
     self.svg_element = svg_element
     self.svg_path = parse_path(svg_element.get('d'))
     self.num_samples = num_samples
 
     # opaque
     self._points = []
+
+  # sgi output colors are int -255 -> 15
+  # def ident_color_string():
+  # case hex, case ref, etc 
 
   @property
   def points(self):
@@ -31,6 +41,24 @@ class FTIPath:
 
     self._points.append(self.svg_path.point(1))
     return self._points
+
+  @property
+  def fti_begin_path(self):
+    if self.svg_element.get('fill'):
+      return "bgnpolygon();\n%s" % self.color
+    else:
+      return "bgnline();\n"
+
+  @property
+  def fti_end_path(self):
+    if self.svg_element.get('fill'):
+      return "pclos();\n"
+    else:
+      return "endline();\n"
+
+  @property
+  def color(self):
+    return "color(%i);\n" % random.sample(range(-255, 15), 1)[0]
 
   def map_points(self, fn):
     self._points = list(map(fn, self._points))
@@ -47,7 +75,11 @@ class FTIBuilder:
 
   def gen_fti_paths(self):
     for el in self.svg_et.findall('.//{http://www.w3.org/2000/svg}path'):
-      yield FTIPath(svg_element=el, num_samples=self.num_samples)
+      yield FTIPath(
+        svg_document=self.svg_et,
+        svg_element=el,
+        num_samples=self.num_samples
+      )
 
   def write_fti(self):
     self.fix_scale()
@@ -55,11 +87,13 @@ class FTIBuilder:
     f = open(self.out, 'w')
 
     for num, fti_path in enumerate(self.fti_paths):
-      f.write("#Path %d\ncolor(outlinecolor);\nbgnline();\n" % (num))
+
+      f.write("#Path %d\n" % (num))
+      f.write(fti_path.fti_begin_path);
       for vertex in fti_path.points:
         # reflect y
         f.write("vertex(%f,%f);\n" % (vertex.real, 100 - vertex.imag))
-      f.write("endline();\n")
+      f.write(fti_path.fti_end_path)
 
     f.close()
 
