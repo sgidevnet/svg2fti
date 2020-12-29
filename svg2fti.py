@@ -1,76 +1,22 @@
 import argparse
 import xml.etree.ElementTree as ET
-import itertools
-import random
-
-from svg.path import parse_path
 
 """
-FTIBuilder: generate SGI Icon
-@mach-kernel / dstancu@nyu.edu
+svg2fti
+@mach-kernel
 """
 
-class FTIPath:
-  def __init__(
-    self,
-    svg_document=None,
-    svg_element=None,
-    num_samples=None
-  ):
-    self.svg_element = svg_element
-    self.svg_path = parse_path(svg_element.get('d'))
-    self.num_samples = num_samples
-
-    # opaque
-    self._points = []
-
-  # sgi output colors are int -255 -> 15
-  # def ident_color_string():
-  # case hex, case ref, etc 
-
-  @property
-  def points(self):
-    if len(self._points):
-      return self._points
-    
-    for i in range(0, self.num_samples - 1):
-      lerp = float(i) / self.num_samples
-      point = self.svg_path.point(lerp)
-      print("Sample %d (lerp %f): %s" % (i, lerp, point))
-      self._points.append(point)
-
-    self._points.append(self.svg_path.point(1))
-    return self._points
-
-  @property
-  def fti_begin_path(self):
-    if self.svg_element.get('fill'):
-      return "bgnpolygon();\n%s" % self.color
-    else:
-      return "bgnline();\n"
-
-  @property
-  def fti_end_path(self):
-    if self.svg_element.get('fill'):
-      return "pclos();\n"
-    else:
-      return "endline();\n"
-
-  @property
-  def color(self):
-    return "color(%i);\n" % random.sample(range(-255, 15), 1)[0]
-
-  def map_points(self, fn):
-    self._points = list(map(fn, self._points))
+from ftibuilder.color import *
+from ftibuilder.path import *
 
 class FTIBuilder:
-  def __init__(self, svg=None, num_samples=None, out=None):
-    # args
+  def __init__(self, svg=None, num_samples=None, out=None, color_map=None):
     self.svg_et = ET.parse(svg)
     self.num_samples = num_samples
     self.out = out
+    self.color_map = color_map
 
-    # data
+    self.fti_color = FTIColor(color_map)
     self.fti_paths = list(self.gen_fti_paths())
 
   def gen_fti_paths(self):
@@ -78,12 +24,12 @@ class FTIBuilder:
       yield FTIPath(
         svg_document=self.svg_et,
         svg_element=el,
-        num_samples=self.num_samples
+        num_samples=self.num_samples,
+        fti_color=self.fti_color
       )
 
   def write_fti(self):
     self.fix_scale()
-
     f = open(self.out, 'w')
 
     for num, fti_path in enumerate(self.fti_paths):
@@ -144,6 +90,14 @@ if __name__ == '__main__':
     help='fti does not support curves. higher is smoother.',
     default=50,
     type=int,
+    required=False
+  )
+
+  parser.add_argument(
+    '--color_map',
+    help='json of sgi palette -> rgb',
+    default='color_map.json',
+    type=str,
     required=False
   )
   FTIBuilder(**vars(parser.parse_args())).write_fti()
