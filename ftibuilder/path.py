@@ -11,6 +11,7 @@ class FTIPath:
     num_samples=None,
     fti_color=None
   ):
+    self.svg_document = svg_document
     self.svg_element = svg_element
     self.svg_path = parse_path(svg_element.get('d'))
     self.num_samples = num_samples
@@ -30,15 +31,17 @@ class FTIPath:
       print("Sample %d (lerp %f): %s" % (i, lerp, point))
       self._points.append(point)
 
-    self._points.append(self.svg_path.point(1))
+    point = self.svg_path.point(1)
+    self._points.append(point)
+    print("Sample %d (lerp %f): %s" % (self.num_samples - 1, 1, point))
+
     return self._points
 
   @property
   def fti_begin_path(self):
     if self.is_polygon:
-      return "color(%i)\nbgnpolygon();\n" % (
-        self.fill or 7
-      )
+      color_str = "color(%i);\n" % self.fill if self.fill else ''
+      return "%sbgnpolygon();\n" % (color_str)
     else:
       return "bgnline();\n"
 
@@ -92,6 +95,8 @@ class FTIPath:
       'css_colors': self.colors_from_style
     }
 
+    print(self._colors)
+
     return self._colors
 
   @property
@@ -105,8 +110,11 @@ class FTIPath:
   def colors_from_attribute(self, attr):
     color = self.svg_element.get(attr)
 
-    if not color or 'url' in color:
+    if not color:
       return None
+
+    if 'url' in color:
+      return self.color_from_url(color)
 
     parsed = tinycss2.color3.parse_color(color)
     if not parsed:
@@ -114,5 +122,18 @@ class FTIPath:
 
     return self.fti_color.rgb2index(*self.fti_color.rgb_float_to_dec(parsed))
 
+  def color_from_url(self, url):
+    ref = re.search(r'url\(#(?P<url>.*)\)', url)
+    if not ref:
+      return None
+    
+    ref = ref.groupdict()['url']
+    for element in self.svg_document.findall(".//*[@id=\"%s\"]/*" % ref):
+      for val in element.attrib.values():
+        parsed = tinycss2.color3.parse_color(val)
+
+        if parsed:
+          return self.fti_color.rgb2index(*self.fti_color.rgb_float_to_dec(parsed))
+      
   def map_points(self, fn):
     self._points = list(map(fn, self._points))
