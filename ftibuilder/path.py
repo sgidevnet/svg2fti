@@ -17,6 +17,7 @@ class FTIPath:
     self.fti_color = fti_color
 
     self._points = []
+    self._colors = {}
 
   @property
   def points(self):
@@ -35,16 +36,20 @@ class FTIPath:
   @property
   def fti_begin_path(self):
     if self.is_polygon:
-      return "color(%s)\nbgnpolygon();\n" % self.color
+      return "color(%i)\nbgnpolygon();\n" % (
+        self.fill or 7
+      )
     else:
       return "bgnline();\n"
 
   @property
-  def fti_end_path(self):
-    if self.is_polygon:
+  def fti_end_path(self):    
+    if self.is_polygon and self.stroke:
+      return "endoutlinepolygon(%i);\n" % (self.stroke)
+    elif self.is_polygon:
       return "pclos();\n"
     else:
-      return "bclos(%i);\n" % self.color
+      return "bclos(%i);\n" % (self.stroke or 0)
 
   @property
   def colors_from_style(self):
@@ -53,13 +58,13 @@ class FTIPath:
       return {}
     
     colors = {}
-    fill = re.match('fill( +)?:( +)?(?P<fill>[^;]*);', style)
+    fill = re.search(r'fill( +)?:( +)?(?P<fill>[^;]*);', style)
     if fill and fill.groupdict():
       fill = fill.groupdict()['fill']
       parsed_fill = tinycss2.color3.parse_color(fill)
       colors['fill'] = self.fti_color.rgb2index(*self.fti_color.rgb_float_to_dec(parsed_fill))
 
-    stroke = re.match('stroke( +)?:( +)?(?P<stroke>[^;]*);', style)
+    stroke = re.search(r'stroke( +)?:( +)?(?P<stroke>[^;]*);', style)
     if stroke and stroke.groupdict():
       stroke = stroke.groupdict()['stroke']
       parsed_stroke = tinycss2.color3.parse_color(stroke)
@@ -69,9 +74,7 @@ class FTIPath:
 
   @property
   def is_polygon(self):
-    attr_stroke = self.colors_from_attribute('stroke')
     attr_fill = self.colors_from_attribute('fill')
-    css_colors = self.colors_from_style
 
     if attr_fill or 'fill' in self.colors_from_style:
       return True
@@ -79,38 +82,35 @@ class FTIPath:
     return False
 
   @property
-  def color(self):
-    attr_stroke = self.colors_from_attribute('stroke')
-    attr_fill = self.colors_from_attribute('fill')
-    css_colors = self.colors_from_style
+  def colors(self):
+    if len(self._colors):
+      return self._colors
 
-    print("colors", attr_fill, attr_stroke, css_colors)
+    self._colors = {
+      'attr_stroke': self.colors_from_attribute('stroke'),
+      'attr_fill': self.colors_from_attribute('fill'),
+      'css_colors': self.colors_from_style
+    }
 
-    if self.is_polygon and 'fill' in css_colors:
-      return css_colors['fill']
-    elif self.is_polygon:
-      return attr_fill
-    elif not self.is_polygon and 'stroke' in css_colors:
-      return css_colors['stroke']
-    elif not self.is_polygon and attr_stroke:
-      return attr_stroke
-    
-    return 0
+    return self._colors
 
-  # @property
-  # def color(self):
-    # random
-    # return "color(%i);\n" % random.sample(range(-255, 15), 1)[0]
+  @property
+  def fill(self):
+    return self.colors['attr_fill'] or self.colors['css_colors'].get('fill', None)
+
+  @property
+  def stroke(self):
+    return self.colors['attr_stroke'] or self.colors['css_colors'].get('stroke', None)
 
   def colors_from_attribute(self, attr):
     color = self.svg_element.get(attr)
 
     if not color or 'url' in color:
-      return ''
+      return None
 
     parsed = tinycss2.color3.parse_color(color)
     if not parsed:
-      return ''
+      return None
 
     return self.fti_color.rgb2index(*self.fti_color.rgb_float_to_dec(parsed))
 
