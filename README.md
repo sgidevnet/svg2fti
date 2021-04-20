@@ -47,3 +47,10 @@ Colors parsed with `tinycss2.color3` from:
   - -16 -> -255 are other colors that are interpolated combinations of colors 0 -> 15
 - `color_map.json` contains a mapping of FTI color palette index to RGB values
 - Only palette colors available, color with smallest delta to input chosen
+
+### Credits
+
+- [svg.path](https://pypi.org/project/svg.path/) and [tinycss2](https://pypi.org/project/tinycss2/) made it possible to sketch this up so fast!
+- [AquaPhoenix's FTI Editor & Specs](https://www.aquaphoenix.com/software/ftieditor/index.html) helped make testing this not painful.
+
+Everything else (c) David Stancu 2021 and contributors.
